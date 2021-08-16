@@ -1,0 +1,11 @@
+  
+# Ignore video files
+*.mp4
+*.avi
+*.mov
+*.wmv
+
+# Ignore image files
+*.png
+*.jpg
+*.jpeg

@@ -96,7 +96,7 @@ Extrinsic Calibration is finished.
 
 ## 04-aruco_calibration.py
 ```
-python3 04-aruco_calibration.py --calib_file ./calibration_files/camera.yml --image_dir ./calibration_image_aruco --image_name image_aruco --image_format png --aruco_type DICT_5X5_50 --square_size 200 --save_file ./calibration_files/camera_aruco.yml
+python3 04-aruco_calibration.py --calib_file ./calibration_files/camera.yml --calib_file_undistorted ./calibration_files/camera_undistorted.yml --image_dir ./calibration_image_aruco --image_name image_aruco --image_format png --aruco_tags_info_file ./aruco_tags_info.csv  --save_file ./calibration_files/camera_aruco.yml
 ```
 
 

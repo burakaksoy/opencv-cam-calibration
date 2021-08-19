@@ -102,7 +102,7 @@ def load_coefficients(path):
     return [camera_matrix, dist_matrix, R_co, R_oc, T_co, T_oc]
 
 def capture_img(image_dir, image_name, image_format):
-    cam = cv2.VideoCapture(0)
+    cam = cv2.VideoCapture(4)
     # cam.set(3,3840)
     # cam.set(4,2160)
     # cam.set(3,640)

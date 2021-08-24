@@ -115,6 +115,7 @@ def calibrate_aruco(intrinsic_calib_path, intrinsic_calib_path_undistorted, imag
 
             # Estimate the pose of the detected marker in camera frame
             rvec, tvec, markerPoints = cv2.aruco.estimatePoseSingleMarkers(markerCorner, 190, mtx_new, dist_new)
+            
 
             cv2.aruco.drawAxis(frame, mtx_new, dist_new, rvec, tvec, 190*0.75)  # Draw Axis
 

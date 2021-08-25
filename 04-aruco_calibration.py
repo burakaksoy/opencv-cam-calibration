@@ -3,6 +3,10 @@ import cv2
 import argparse
 import sys
 import pandas as pd
+import math
+
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 
 # define names of each possible ArUco tag OpenCV supports
 ARUCO_DICT = {
@@ -55,6 +59,7 @@ def calibrate_aruco(intrinsic_calib_path, intrinsic_calib_path_undistorted, imag
 
     corners_all = []
     ids_all = []
+    sizes_all = []
 
     for aruco_type in aruco_types:
         arucoType = ARUCO_DICT[aruco_type]
@@ -77,16 +82,25 @@ def calibrate_aruco(intrinsic_calib_path, intrinsic_calib_path_undistorted, imag
                 if markerID in ids_on_floor_with_current_aruco_type:
                     corners_all.append(corners[i])
                     ids_all.append(markerID)
+                    markerSize = float(df[(df["place"]=="floor") & (df["aruco_type"]==aruco_type) & (df["id"]==markerID)]["size_mm"])
+                    sizes_all.append(markerSize)
 
         # print(corners_all)
         # print(ids_all)
+        # print(sizes_all)
 
     print("[INFO] Num of detected Tags: ",len(corners_all))
 
+    corners_all = np.array(corners_all)
+    ids_all = np.array(ids_all)
+    sizes_all = np.array(sizes_all)
+
     # verify *at least* one ArUco marker was detected on floor
     if len(corners_all) > 0:
+        rvecs = []
+        tvecs = []
         # loop over the detected ArUCo corners and draw  ids and bounding boxes around the detected markers
-        for (markerCorner, markerID) in zip(corners_all, ids_all):
+        for (markerCorner, markerID, markerSize) in zip(corners_all, ids_all, sizes_all):
             # extract the marker corners (which are always returned in
             # top-left, top-right, bottom-right, and bottom-left order)
             corners = markerCorner.reshape((4, 2))
@@ -99,10 +113,10 @@ def calibrate_aruco(intrinsic_calib_path, intrinsic_calib_path_undistorted, imag
             topLeft = (int(topLeft[0]), int(topLeft[1]))
 
             # draw the bounding box of the ArUCo detection
-            cv2.line(frame, topLeft, topRight, (0, 255, 0), 2)
-            cv2.line(frame, topRight, bottomRight, (0, 255, 0), 2)
-            cv2.line(frame, bottomRight, bottomLeft, (0, 255, 0), 2)
-            cv2.line(frame, bottomLeft, topLeft, (0, 255, 0), 2)
+            cv2.line(frame, topLeft, topRight, (0, 255, 0), 1)
+            cv2.line(frame, topRight, bottomRight, (0, 255, 0), 1)
+            cv2.line(frame, bottomRight, bottomLeft, (0, 255, 0), 1)
+            cv2.line(frame, bottomLeft, topLeft, (0, 255, 0), 1)
             # compute and draw the center (x, y)-coordinates of the ArUco
             # marker
             cX = int((topLeft[0] + bottomRight[0]) / 2.0)
@@ -114,17 +128,109 @@ def calibrate_aruco(intrinsic_calib_path, intrinsic_calib_path_undistorted, imag
                 0.5, (0, 255, 0), 2)
 
             # Estimate the pose of the detected marker in camera frame
-            rvec, tvec, markerPoints = cv2.aruco.estimatePoseSingleMarkers(markerCorner, 190, mtx_new, dist_new)
+            rvec, tvec, markerPoints = cv2.aruco.estimatePoseSingleMarkers(markerCorner, markerSize, mtx_new, dist_new)
             
-
-            cv2.aruco.drawAxis(frame, mtx_new, dist_new, rvec, tvec, 190*0.75)  # Draw Axis
+            cv2.aruco.drawAxis(frame, mtx_new, dist_new, rvec, tvec, markerSize*0.75)  # Draw Axis
 
             # print("[INFO] ArUco marker ID: {}".format(markerID))
-            print(tvec[0].flatten()) # in camera's frame)
+            # print(tvec[0].flatten()) # in camera's frame)
+            # print(rvec[0].flatten()) # in camera's frame)
+            rvecs.append(rvec[0])
+            tvecs.append(tvec[0])
 
-    # show the output image
-    cv2.imshow("Image", frame)
-    cv2.waitKey(0)
+        rvecs = np.array(rvecs)
+        tvecs = np.array(tvecs)
+
+        # # Estimate the pose of the detected marker in camera frame at once 
+        # rvecs, tvecs, markerPoints = cv2.aruco.estimatePoseSingleMarkers(corners_all, 190, mtx_new, dist_new)
+        # cv2.aruco.drawDetectedMarkers(frame, corners_all, ids_all)  # Draw Bounding boxes
+        # for (rvec, tvec) in zip(rvecs, tvecs):
+        #     cv2.aruco.drawAxis(frame, mtx_new, dist_new, rvec, tvec, 190*0.75)  # Draw Axis
+    
+        # show the output image
+        cv2.imshow("Image", frame)
+        cv2.waitKey(0)
+
+        # print(tvecs)
+        # print(type(tvec))
+        # print(type(tvecs))
+
+        # Transform detected locations from camera frame to World frame
+        tvecs = np.squeeze(tvecs).T # (3,N)
+        tvecs = R_oc @ tvecs # (3,N)
+        tvecs = T_oc + tvecs # (3,N)
+        # print(np.shape(tvecs))
+
+        # Calculate the best fitting plane
+        origin = np.mean(tvecs,axis=1).reshape(3,1)
+        tvecs2 = np.squeeze(tvecs - origin) #  (3, N)
+        (U,S,Vt) = np.linalg.svd(tvecs2)
+        normal_vec = U[:,-1].reshape(3,1)
+        
+        # Calculate residuals of the plane fitting
+        distances = normal_vec.T @ tvecs2
+        RMSE = math.sqrt(np.mean(np.square(distances)))
+        # print("RMSE: ", RMSE, " (mm)")
+
+        # Plot the data and fitting plane
+        # plot data
+        plt.figure()
+        ax = plt.subplot(111, projection='3d')
+        ax.scatter(tvecs[0,:], tvecs[1,:], tvecs[2,:], color='b')
+
+        # plot plane
+        xlim = ax.get_xlim()
+        ylim = ax.get_ylim()
+        X,Y = np.meshgrid(np.arange(xlim[0], xlim[1], step=500),
+                        np.arange(ylim[0], ylim[1], step=500))
+
+        Z = -(normal_vec[0]/normal_vec[2])*(X-origin[0]) - (normal_vec[1]/normal_vec[2])*(Y-origin[1]) + origin[2] 
+
+        ax.plot_wireframe(X,Y,Z, color='k')
+
+        ax.set_xlabel('x')
+        ax.set_ylabel('y')
+        ax.set_zlabel('z')
+        plt.show()
+
+        ## Calculate the frame on the best fit plane based on world origin
+        # Project the world origin onto the best fit plane
+        origin_new = (normal_vec.T @ origin) * normal_vec
+        # Projecy world frame x axis onto the origin 
+        x = np.array([[1],[0],[0]])
+        x_p = x - (normal_vec.T @ (x - origin) ) * normal_vec
+        # calculate the corresponding x axis on the plane
+        x_new = (x_p - origin_new) / np.sqrt(np.sum((x_p - origin_new)**2))
+        # calculate the corresponding y axis on the plane
+        y_new = np.cross(np.squeeze(normal_vec), np.squeeze(x_new)).reshape(3,1)
+        # y_new = y_new / np.sqrt(np.sum(y_new**2)) # Normalization is not necessary since x_new and normal_vec are perpendicular
+
+        # Define the rotation matrix from world frame to new plane frame
+        R_op = np.concatenate((x_new, y_new,normal_vec), axis=1)
+        R_po = R_op.T
+
+        # Define the translation between world frame to plane frame
+        T_op = origin_new
+        T_po = -R_po @ T_op
+
+        # As an example project all data points to the plane
+        tvecs3 = R_po @ tvecs # (3,N)
+        tvecs3 = T_po + tvecs3 # (3,N)
+        tvecs3 = tvecs3[0:2,:]
+
+        plt.figure()
+        plt.title("2D Data")
+        plt.xlabel("X")
+        plt.ylabel("Y")
+        plt.scatter(tvecs3[0,:], tvecs3[1,:], marker='x')
+        plt.axis('equal')
+        plt.grid()
+        plt.show()
+
+    return R_op, R_po, T_op, T_po, RMSE
+
+
+
 
 
 def load_coefficients(path):
@@ -187,6 +293,31 @@ def capture_img(image_dir, image_name, image_format):
     cv2.destroyAllWindows()
     return img
 
+
+def save_coefficients(R_op, R_po, T_op, T_po, RMSE, path):
+    """ Save the camera matrix and the distortion coefficients to given path/file. """
+    cv_file = cv2.FileStorage(path, cv2.FILE_STORAGE_WRITE)
+    
+    # Rotation matrix 
+    print("R_op: " + str(R_op))
+    cv_file.write("R_op", R_op )
+
+    print("R_po: " + str(R_po))
+    cv_file.write("R_po", R_po)
+
+    # Tranlastion vector
+    cv_file.write("T_op", T_op)
+    print("T_op: " + str(T_op))
+
+    print("T_po: " + str(T_po))
+    cv_file.write("T_po", T_po)
+
+    print("RMSE: ", RMSE, " (mm)")
+    cv_file.write("RMSE", RMSE)
+
+    # note you *release* you don't close() a FileStorage object
+    cv_file.release()
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Camera Aruco calibration')
 
@@ -201,7 +332,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
     
 
-    # mtx, dist, rvecs, tvecs =
-    calibrate_aruco(args.calib_file, args.calib_file_undistorted,  args.image_dir, args.image_name, args.image_format, args.aruco_tags_info_file)
-    # save_coefficients(mtx, dist, rvecs, tvecs, args.save_file)
+    R_op, R_po, T_op, T_po, RMSE = calibrate_aruco(args.calib_file, args.calib_file_undistorted,  args.image_dir, args.image_name, args.image_format, args.aruco_tags_info_file)
+    save_coefficients(R_op, R_po, T_op, T_po, RMSE, args.save_file)
     print("Aruco Calibration is finished.")

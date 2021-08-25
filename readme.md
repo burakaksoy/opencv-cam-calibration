@@ -89,14 +89,77 @@ T_oc: [[   59.70197468]
  [-3812.66255087]]
 Extrinsic Calibration is finished.
 ```
-(`R_co`: Rotation matrix from camera frame to origin)  
-(`R_oc`: Rotation matrix from origin frame to camera)  
-(`T_co`: Translation vector from camera frame to origin in camera frame)  
-(`T_oc`: Rotation matrix from origin frame to camera in origin frame)
+(`R_co`: Rotation matrix from camera frame to world frame)  
+(`R_oc`: Rotation matrix from world frame to camera)  
+(`T_co`: Translation vector from camera frame to world frame in camera frame)  
+(`T_oc`: Translation vector from world frame to camera in world frame)
 
 ## 04-aruco_calibration.py
-```
-python3 04-aruco_calibration.py --calib_file ./calibration_files/camera.yml --calib_file_undistorted ./calibration_files/camera_undistorted.yml --image_dir ./calibration_image_aruco --image_name image_aruco --image_format png --aruco_tags_info_file ./aruco_tags_info.csv  --save_file ./calibration_files/camera_aruco.yml
-```
+
+This script finds the best fitting plane with respect to world frame (defined in extrinsic calibration) as "floor" using the ArUco tags that are spread on a surface. 
+The properties of the ArUco tags are defined in a `csv` file with the following strutcture (for example see: `./aruco_tags_info.csv`):
 
 
+| place    | aruco_type  | id  | size_mm | x   | y   | z   |
+| ---      | ---         | --- | ---     | --- | --- | --- |
+| floor    | DICT_5X5_50 | 12  | 190     | 0 | 0 | 0 |
+
+`place` key is for defining the frame which an Aruco tag is attached, `aruco_type` is the dictionary type of the Aruco tag. `id` is the corresponding Aruco tag id. `size_mm` is the one side size of the Aruco tags in millimeters. `x,y,z` keys are not used for this script but they will be used for defining the relative position of the aruco tags that they are attached to, for instance where the aruco tag is attached with respect to a robot's center. Note that the orientations of the tags are not considered for this script, for later scripts we will assume that they are aligned with the frames that they are attached to, hence we did not define orientation paramaters in the `csv` file.
+
+
+*Note: OpenCv accepts the following Aruco tag types as of today(August 25, 2021): [See here](https://docs.opencv.org/3.4/d9/d6a/group__aruco.html#gac84398a9ed9dd01306592dd616c2c975)*
+```
+	"DICT_4X4_50"
+	"DICT_4X4_100"
+	"DICT_4X4_250"
+	"DICT_4X4_1000"
+	"DICT_5X5_50"
+	"DICT_5X5_100"
+	"DICT_5X5_250"
+	"DICT_5X5_1000"
+	"DICT_6X6_50"
+	"DICT_6X6_100"
+	"DICT_6X6_250"
+	"DICT_6X6_1000"
+	"DICT_7X7_50"
+	"DICT_7X7_100"
+	"DICT_7X7_250"
+	"DICT_7X7_1000"
+	"DICT_ARUCO_ORIGINAL"
+	"DICT_APRILTAG_16h5"
+	"DICT_APRILTAG_25h9"
+	"DICT_APRILTAG_36h10"
+	"DICT_APRILTAG_36h11"
+```
+
+ The following command reads the previously calculated default and undistorted intrinsic parameters and the defined world frame as extrinsic parameters from `./calibration_files/camera.yml` and `./calibration_files/camera_undistorted.yml`, captures 1 image, saves it into `calibration_image_aruco/` folder with the name `image_aruco` and image type `png`. Undistorts the image to prepare for aruco tag detection and detects 3D position of the tags with respect to the defined world origin. Draws bounding boxes around the detected tags (this could be used for visual inspection for the detection accuracy and the inaccurate looking ones can be eliminated from the csv file) and also draws their frames. Then finds the best fitting plane for the detected 3D points. Best fitting plane is defined with its passing-through point as the mean of the 3D points and a normal vector represented in the world frame. Fitting residual error value is printed as RMSE into the console. Then, the world frame origin and it's x-axis are projected into the best fitting plane, and are used to define the best plane frame and the origin.  The calculated results are saved to `./calibration_files/camera_aruco.yml`
+
+```
+python3 04-aruco_calibration.py --calib_file ./calibration_files/camera.yml --calib_file_undistorted ./calibration_files/camera_undistorted.yml --image_dir ./calibration_image_aruco --image_name image_aruco --image_format png --aruco_tags_info_file ./aruco_tags_info2.csv  --save_file ./calibration_files/camera_aruco.yml
+```
+
+An example output would be:
+```
+Hit SPACE key to capture, Hit ESC key to continue
+Escape hit, closing...
+[INFO] detecting 'DICT_5X5_50' tags...
+[INFO] Num of detected Tags:  13
+R_op: [[ 9.99702278e-01 -8.23993651e-18  2.43998990e-02]
+ [ 1.16489311e-03  9.98859714e-01 -4.77275046e-02]
+ [-2.43720761e-02  4.77417184e-02  9.98562332e-01]]
+R_po: [[ 9.99702278e-01  1.16489311e-03 -2.43720761e-02]
+ [-8.23993651e-18  9.98859714e-01  4.77417184e-02]
+ [ 2.43998990e-02 -4.77275046e-02  9.98562332e-01]]
+T_op: [[  5.56848635]
+ [-10.89225649]
+ [227.88949733]]
+T_po: [[-2.06856754e-12]
+ [ 0.00000000e+00]
+ [-2.28217599e+02]]
+RMSE:  34.99319118786799  (mm)
+Aruco Calibration is finished.
+```
+(`R_op`: Rotation matrix from world frame to best fitting plane frame)  
+(`R_po`: Rotation matrix from origin frame to world frame)  
+(`T_op`: Translation vector from world frame to best fitting plane frame in world frame)  
+(`T_po`: Translation vector from best fitting plane frame to world frame in best fitting plane frame)

@@ -3,7 +3,7 @@ import cv2
 import argparse
 
 def calibrate_camera_extrinsic(intrinsic_calib_path, intrinsic_calib_path_undistorted, image_dir, image_name, image_format, square_size, width=9, height=6):
-    # TODO: verify calibration data
+    
 
     [mtx, dist] = load_coefficients(intrinsic_calib_path)
     [mtx_new, dist_new] = load_coefficients(intrinsic_calib_path_undistorted)
@@ -43,7 +43,8 @@ def calibrate_camera_extrinsic(intrinsic_calib_path, intrinsic_calib_path_undist
     axis_sizes= [1000]
     for axis_size in axis_sizes:
         # axis_size = 4000 # mm
-        axis = np.float32([[axis_size,0,0], [0,axis_size,0], [0,0,axis_size]]).reshape(-1,3)
+        # axis = np.float32([[axis_size,0,0], [0,axis_size,0], [0,0,axis_size]]).reshape(-1,3) # Default openCV chessboard axes
+        axis = np.float32([[0,axis_size,0], [axis_size,0,0], [0,0,-axis_size]]).reshape(-1,3) # For our world we want axes in this config, so draw accordingly
         # axis = np.float32([[axis_size,0,0], [0,0,0], [0,0,0]]).reshape(-1,3)
         # print('axis: ',axis)
 
@@ -84,9 +85,12 @@ def save_coefficients(mtx, dist, rvecs, tvecs, path):
     # Distortion Coefficients
     cv_file.write("D", dist)
 
+    R_bo = np.array([[0,1.,0],[1.,0,0],[0,0,-1.]]) # Rotation matrix btw chessBoard and the world frame we want
+
     # Rotation matrix 
-    # R_co, _ = cv2.Rodrigues(rvecs[0]) 
-    R_co = cv2.Rodrigues(rvecs.flatten())[0] 
+    
+    R_cb = cv2.Rodrigues(rvecs.flatten())[0] 
+    R_co = R_cb @ R_bo
     print("R_co: " + str(R_co))
     cv_file.write("R_co", R_co )
 

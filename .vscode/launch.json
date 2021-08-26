@@ -4,6 +4,7 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
+
         
         {
             "name": "Python: Current File",
@@ -11,7 +12,7 @@
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
-            "args": ["--calib_file", "./calibration_files/camera.yml", "--calib_file_undistorted", "./calibration_files/camera_undistorted.yml", "--image_dir", "./calibration_image_aruco", "--image_name", "image_aruco", "--image_format", "png", "--aruco_tags_info_file", "./aruco_tags_info2.csv",  "--save_file", "./calibration_files/camera_aruco.yml"]
+            "args": ["--calib_file", "./calibration_files/camera.yml", "--calib_file_undistorted", "./calibration_files/camera_undistorted.yml", "--calib_file_aruco", "./calibration_files/camera_aruco.yml" , "--aruco_tags_info_file", "./aruco_tags_info2.csv",  "--save_file", "./calibration_files/camera_aruco.yml"]
         }
     ]
 }

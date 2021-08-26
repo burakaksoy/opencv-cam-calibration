@@ -326,7 +326,7 @@ if __name__ == '__main__':
     parser.add_argument('--image_dir', type=str, required=True, help='image directory path')
     parser.add_argument('--image_format', type=str, required=True,  help='image format, png/jpg')
     parser.add_argument('--image_name', type=str, required=True, help='image name without extension or location')
-    parser.add_argument('--aruco_tags_info_file', type=str, required=True, default="DICT_5X5_50", help="type of ArUCo tag to detect")
+    parser.add_argument('--aruco_tags_info_file', type=str, required=True, help="info csv file about the existing Aruco tags in the workspace")
     parser.add_argument('--save_file', type=str, required=True, help='YML file to save calibration matrices')
 
     args = parser.parse_args()

@@ -36,244 +36,279 @@ ARUCO_DICT = {
 }
 
 def aruco_localize_2D(intrinsic_calib_path, intrinsic_calib_path_undistorted, calib_path_aruco, aruco_tags_info_path):
-    
-    [mtx, dist, R_co, R_oc, T_co, T_oc] = load_coefficients(intrinsic_calib_path)
-    [mtx_new, dist_new, R_co, R_oc, T_co, T_oc] = load_coefficients(intrinsic_calib_path_undistorted)
-    [R_op, R_po, T_op, T_po] = load_coefficients_best_fit_plane(calib_path_aruco)
-    
-    # read csv file that includes places of the aruco tags, their aruco type, ids, sizes and locations wrt their places
-    df = pd.read_csv(aruco_tags_info_path)
-    # drop rows that are on the floor so that there are only robots to be localized left
-    df = df[df["place"]!="floor"]
-    # drop duplicate rows with the same place (robot) name
-    df = df.drop_duplicates(subset='place', keep="first")
-    # get aruco dictionary types on the robots as a list
-    aruco_types = list(df["aruco_type"].unique())
-    print(aruco_types)
+    debug_image_view = False # Shows opencv aruco detections on camera image
+    debug_plot_view = False # Shows robot positions on matplotlib
+    debug_save_undistorted_img = False # For saving undistorted images for later use again
+    debug_save_labeled_img = False # If debug image view is False this does not have any effect
 
-    cam = cv2.VideoCapture(1)
-    cam.set(3,3840)
-    cam.set(4,2160)
-    # cam.set(3,640)
-    # cam.set(4,480)
-
-    is_started_plot = False
-
-    # cv2.namedWindow("Image")
-
-    # draw the figure so the animations will work
-    fig = plt.figure()
-    fig.show()
-
-    while True:
-        ret, frame = cam.read()
-        if not ret:
-            print("failed to grab frame")
-            break
+    try:
+        [mtx, dist, R_co, R_oc, T_co, T_oc] = load_coefficients(intrinsic_calib_path)
+        [mtx_new, dist_new, R_co, R_oc, T_co, T_oc] = load_coefficients(intrinsic_calib_path_undistorted)
+        [R_op, R_po, T_op, T_po] = load_coefficients_best_fit_plane(calib_path_aruco)
         
-        time_stamp = time.time()
-        
-        # try undistorted image
-        # h,  w = frame.shape[:2]
-        # newcameramtx, roi = cv2.getOptimalNewCameraMatrix(mtx, dist, (w,h), 1, (w,h))
-        # undistort
-        # # frame = cv2.undistort(frame, mtx, dist, None, newcameramtx)
-        frame = cv2.undistort(frame, mtx, dist, None, mtx)
-        # # # crop the image
-        # # x, y, w, h = roi
-        # # frame = frame[y:y+h, x:x+w]
+        # read csv file that includes places of the aruco tags, their aruco type, ids, sizes and locations wrt their places
+        df = pd.read_csv(aruco_tags_info_path)
+        # drop rows that are on the floor so that there are only robots to be localized left
+        df = df[df["place"]!="floor"]
+        # drop duplicate rows with the same place (robot) name
+        df = df.drop_duplicates(subset='place', keep="first")
+        # get aruco dictionary types on the robots as a list
+        aruco_types = list(df["aruco_type"].unique())
+        print(aruco_types)
 
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        # create an Empty DataFrame for saving outputs
+        # object With column names only
+        df_output = pd.DataFrame(columns = ['place', 'time', 'x','y','theta'])
 
-        places_all = []
-        types_all = []
-        corners_all = []
-        ids_all = []
-        sizes_all = []
-        xs_all = []
-        ys_all = []
-        zs_all = []
+        # Start the camera
+        cam = cv2.VideoCapture(1)
+        cam.set(3,3840)
+        cam.set(4,2160)
+        # cam.set(3,640)
+        # cam.set(4,480)
 
-        for aruco_type in aruco_types:
-            arucoType = ARUCO_DICT[aruco_type]
-
-            # verify that the supplied ArUCo tag exists and is supported by OpenCV
-            if ARUCO_DICT.get(aruco_type, None) is None:
-                print("[ERROR] ArUCo tag of '{}' is not supported".format(aruco_type))
-                sys.exit(0)
-
-            # load the ArUCo dictionary, grab the ArUCo parameters, and detect the markers
-            print("[INFO] detecting '{}' tags...".format(aruco_type))
-            arucoDict = cv2.aruco.Dictionary_get(ARUCO_DICT[aruco_type])
-            arucoParams = cv2.aruco.DetectorParameters_create()
-            (corners, ids, rejected) = cv2.aruco.detectMarkers(gray, arucoDict, parameters=arucoParams)
-            
-            # only keep the detections that are NOT on the floor by looking at the IDs
-            ids_on_robots_with_current_aruco_type = list(df[(df["aruco_type"]==aruco_type)]["id"])
-            if len(corners) > 0: # verify *at least* one ArUco marker was detected            
-                for i, markerID in enumerate(list(ids.flatten())): # loop over the detected ArUCo corners
-                    if markerID in ids_on_robots_with_current_aruco_type:
-                        robot_row = df[(df["aruco_type"]==aruco_type) & (df["id"]==markerID)]
-                        place = robot_row["place"].item()
-                        places_all.append(place)
-
-                        types_all.append(aruco_type)
-
-                        corners_all.append(corners[i])
-                        
-                        ids_all.append(markerID)
-                        
-                        markerSize = float(robot_row["size_mm"])
-                        sizes_all.append(markerSize)
-
-                        x = float(robot_row["x"])
-                        xs_all.append(x)
-
-                        y = float(robot_row["y"])
-                        ys_all.append(y)
-
-                        z = float(robot_row["z"])
-                        zs_all.append(z)
-
-            # print(places_all)
-            # print(types_all)
-            # print(corners_all)
-            # print(ids_all)
-            # print(sizes_all)
-            # print(xs_all)
-            # print(ys_all)
-            # print(zs_all)
-
-        print("[INFO] Num of detected Tags: ",len(corners_all))
-
-        corners_all = np.array(corners_all)
-        ids_all = np.array(ids_all)
-        sizes_all = np.array(sizes_all)
-        xs_all = np.array(xs_all)
-        ys_all = np.array(ys_all)
-        zs_all = np.array(zs_all)
-
-        # verify *at least* one ArUco marker was remained on robots
-        if len(corners_all) > 0:
-            # then its a worthy image, save it
-            img_name = "./localization_images/image_{}.png".format(time_stamp)
-            # cv2.imwrite(img_name, frame)
-            # print("{} written!".format(img_name))
-
-            annotations_all = []
-            rvecs_all = []
-            tvecs_all = []
-            # loop over the detected ArUCo corners and draw ids and bounding boxes around the detected markers with the robot information
-            for (place, aruco_type, markerCorner, markerID, markerSize, x,y,z) in zip(places_all, types_all, corners_all, ids_all, sizes_all, xs_all,ys_all,zs_all):
-                # extract the marker corners (which are always returned in
-                # top-left, top-right, bottom-right, and bottom-left order)
-                corners = markerCorner.reshape((4, 2))
-
-                (topLeft, topRight, bottomRight, bottomLeft) = corners
-                # convert each of the (x, y)-coordinate pairs to integers
-                topRight = (int(topRight[0]), int(topRight[1]))
-                bottomRight = (int(bottomRight[0]), int(bottomRight[1]))
-                bottomLeft = (int(bottomLeft[0]), int(bottomLeft[1]))
-                topLeft = (int(topLeft[0]), int(topLeft[1]))
-
-                # draw the bounding box of the ArUCo detection
-                cv2.line(frame, topLeft, topRight, (0, 255, 0), 1)
-                cv2.line(frame, topRight, bottomRight, (0, 255, 0), 1)
-                cv2.line(frame, bottomRight, bottomLeft, (0, 255, 0), 1)
-                cv2.line(frame, bottomLeft, topLeft, (0, 255, 0), 1)
-                # compute and draw the center (x, y)-coordinates of the ArUco
-                # marker
-                cX = int((topLeft[0] + bottomRight[0]) / 2.0)
-                cY = int((topLeft[1] + bottomRight[1]) / 2.0)
-                cv2.circle(frame, (cX, cY), 4, (0, 0, 255), -1)
-                # draw the ArUco marker ID on the image
-                place_info = str(place) + ", "+ str(aruco_type) + ", id:" +str(markerID) + ", " + str(markerSize) + " mm"
-                annotations_all.append(place_info)
-                cv2.putText(frame, place_info,
-                    (topLeft[0], topLeft[1] - 15), cv2.FONT_HERSHEY_SIMPLEX,
-                    0.5, (0, 255, 0), 2)
-
-                # Estimate the pose of the detected marker in camera frame
-                rvec, tvec, markerPoints = cv2.aruco.estimatePoseSingleMarkers(markerCorner, markerSize, mtx_new, dist_new)
-                
-                cv2.aruco.drawAxis(frame, mtx_new, dist_new, rvec, tvec, markerSize*0.75)  # Draw Axis
-
-                # Add the Transform from robot frame to marker frame
-                R_cm = cv2.Rodrigues(rvec.flatten())[0] # 3x3
-                T_cm = tvec[0].T # 3x1
-
-                R_rm = np.eye(3)# Marker and the Robot has the same orientation assumption, otherwise we had to parse it from csv file adding orientation paramaters
-                T_rm = np.array([x,y,z]).reshape(3,1) # 3x1
-
-                R_cr = R_cm @ R_rm.T
-                T_cr = T_cm - R_cr@T_rm
-
-                # print("[INFO] ArUco marker ID: {}".format(markerID))
-                # print(tvec[0].flatten()) # in camera's frame)
-                # print(rvec[0].flatten()) # in camera's frame)
-                rvecs_all.append(R_cr)
-                tvecs_all.append(T_cr)
-
-            rvecs_all = np.array(rvecs_all) # (N,3,3)
-            tvecs_all = np.array(tvecs_all) # (N,3,1)
-            tvecs_all = np.squeeze(tvecs_all).T # (3,N)
-
-            # show the output image
-            # cv2.imshow("Image", frame)
-            # k = cv2.waitKey(1)
-
-            # Transform detected robot locations from camera frame to World frame
-            rvecs_all = R_oc @ rvecs_all # (N,3,3) # R_or 
-
-            tvecs_all = R_oc @ tvecs_all # (3,N)
-            tvecs_all = T_oc + tvecs_all # (3,N) # T_or 
-            # print(np.shape(tvecs_all))
-
-            # Transform detected robot locations from World frame to plane frame
-            rvecs_all = R_po @ rvecs_all # (N,3,3) # R_pr 
-
-            tvecs_all = R_po @ tvecs_all # (3,N)
-            tvecs_all = T_po + tvecs_all # (3,N) # T_pr
-
-            # Convert 3D info to 2D data
-            # Convert rotation matrices to ZYX euler angles
-            THETAs = []
-            for R in rvecs_all:
-                x,y,z = euler_angles_from_rotation_matrix(R)
-                THETAs.append(z) # rad
-
-            tvecs_all = tvecs_all[0:2,:] # remove the z axis values since we need 2D data
-            Xs = tvecs_all[0,:]
-            Ys = tvecs_all[1,:]
-            
-            
-            # plt.figure()
-            plt.title("2D Data")
-            plt.xlabel("X")
-            plt.ylabel("Y")
-
-            plt.scatter(Xs, Ys, marker='o')
-            plt.axis('equal')
-            for i, label in enumerate(places_all): 
-                plt.text(Xs[i], Ys[i],label)
-
-            for (x,y,theta) in zip(Xs,Ys,THETAs):
-                plt.arrow(x, y, math.cos(theta)*250,math.sin(theta)*250, head_width = .1)
-
-            plt.grid()
-            plt.pause(0.01)
-            # plt.show()
+        if debug_image_view:
+            cv2.namedWindow("Image")
+        if debug_plot_view:
+            # draw the figure so the animations will work
+            fig = plt.figure()
             fig.show()
 
+        print("Press Ctrl-C to terminate program")
+        while True:
+            ret, frame = cam.read()
+            if not ret:
+                print("failed to grab frame")
+                break
+            
+            time_stamp = time.time()
+            
+            # try undistorted image
+            # h,  w = frame.shape[:2]
+            # newcameramtx, roi = cv2.getOptimalNewCameraMatrix(mtx, dist, (w,h), 1, (w,h))
+            # undistort
+            # # frame = cv2.undistort(frame, mtx, dist, None, newcameramtx)
+            frame = cv2.undistort(frame, mtx, dist, None, mtx)
+            # # # crop the image
+            # # x, y, w, h = roi
+            # # frame = frame[y:y+h, x:x+w]
 
-        """---------------------------------------------------"""
-        # if k%256 == 27:
-        #     # ESC pressed
-        #     print("Escape hit, closing...")
-        #     break
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-    cam.release()
-    cv2.destroyAllWindows()
+            places_all = []
+            types_all = []
+            corners_all = []
+            ids_all = []
+            sizes_all = []
+            xs_all = []
+            ys_all = []
+            zs_all = []
+
+            for aruco_type in aruco_types:
+                arucoType = ARUCO_DICT[aruco_type]
+
+                # verify that the supplied ArUCo tag exists and is supported by OpenCV
+                if ARUCO_DICT.get(aruco_type, None) is None:
+                    print("[ERROR] ArUCo tag of '{}' is not supported".format(aruco_type))
+                    sys.exit(0)
+
+                # load the ArUCo dictionary, grab the ArUCo parameters, and detect the markers
+                print("[INFO] detecting '{}' tags...".format(aruco_type))
+                arucoDict = cv2.aruco.Dictionary_get(ARUCO_DICT[aruco_type])
+                arucoParams = cv2.aruco.DetectorParameters_create()
+                (corners, ids, rejected) = cv2.aruco.detectMarkers(gray, arucoDict, parameters=arucoParams)
+                
+                # only keep the detections that are NOT on the floor by looking at the IDs
+                ids_on_robots_with_current_aruco_type = list(df[(df["aruco_type"]==aruco_type)]["id"])
+                if len(corners) > 0: # verify *at least* one ArUco marker was detected            
+                    for i, markerID in enumerate(list(ids.flatten())): # loop over the detected ArUCo corners
+                        if markerID in ids_on_robots_with_current_aruco_type:
+                            robot_row = df[(df["aruco_type"]==aruco_type) & (df["id"]==markerID)]
+                            place = robot_row["place"].item()
+                            places_all.append(place)
+
+                            types_all.append(aruco_type)
+
+                            corners_all.append(corners[i])
+                            
+                            ids_all.append(markerID)
+                            
+                            markerSize = float(robot_row["size_mm"])
+                            sizes_all.append(markerSize)
+
+                            x = float(robot_row["x"])
+                            xs_all.append(x)
+
+                            y = float(robot_row["y"])
+                            ys_all.append(y)
+
+                            z = float(robot_row["z"])
+                            zs_all.append(z)
+
+                # print(places_all)
+                # print(types_all)
+                # print(corners_all)
+                # print(ids_all)
+                # print(sizes_all)
+                # print(xs_all)
+                # print(ys_all)
+                # print(zs_all)
+
+            print("[INFO] Num of detected Tags: ",len(corners_all))
+
+            corners_all = np.array(corners_all)
+            ids_all = np.array(ids_all)
+            sizes_all = np.array(sizes_all)
+            xs_all = np.array(xs_all)
+            ys_all = np.array(ys_all)
+            zs_all = np.array(zs_all)
+
+            # verify *at least* one ArUco marker was remained on robots
+            if len(corners_all) > 0:
+                if debug_save_undistorted_img:
+                    # then its a worthy image, save it
+                    img_name = "./localization_images/image_{}.png".format(time_stamp)
+                    cv2.imwrite(img_name, frame)
+                    print("{} written!".format(img_name))
+
+                rvecs_all = []
+                tvecs_all = []
+                # loop over the detected ArUCo corners and draw ids and bounding boxes around the detected markers with the robot information
+                for (place, aruco_type, markerCorner, markerID, markerSize, x,y,z) in zip(places_all, types_all, corners_all, ids_all, sizes_all, xs_all,ys_all,zs_all):
+                    if debug_image_view:
+                        # extract the marker corners (which are always returned in
+                        # top-left, top-right, bottom-right, and bottom-left order)
+                        corners = markerCorner.reshape((4, 2))
+
+                        (topLeft, topRight, bottomRight, bottomLeft) = corners
+                        # convert each of the (x, y)-coordinate pairs to integers
+                        topRight = (int(topRight[0]), int(topRight[1]))
+                        bottomRight = (int(bottomRight[0]), int(bottomRight[1]))
+                        bottomLeft = (int(bottomLeft[0]), int(bottomLeft[1]))
+                        topLeft = (int(topLeft[0]), int(topLeft[1]))
+
+                        # draw the bounding box of the ArUCo detection
+                        cv2.line(frame, topLeft, topRight, (0, 255, 0), 1)
+                        cv2.line(frame, topRight, bottomRight, (0, 255, 0), 1)
+                        cv2.line(frame, bottomRight, bottomLeft, (0, 255, 0), 1)
+                        cv2.line(frame, bottomLeft, topLeft, (0, 255, 0), 1)
+                        # compute and draw the center (x, y)-coordinates of the ArUco
+                        # marker
+                        cX = int((topLeft[0] + bottomRight[0]) / 2.0)
+                        cY = int((topLeft[1] + bottomRight[1]) / 2.0)
+                        cv2.circle(frame, (cX, cY), 4, (0, 0, 255), -1)
+                        # draw the ArUco marker ID on the image
+                        place_info = str(place) + ", "+ str(aruco_type) + ", id:" +str(markerID) + ", " + str(markerSize) + " mm"
+                        cv2.putText(frame, place_info,
+                            (topLeft[0], topLeft[1] - 15), cv2.FONT_HERSHEY_SIMPLEX,
+                            0.5, (0, 255, 0), 2)
+
+                    # Estimate the pose of the detected marker in camera frame
+                    rvec, tvec, markerPoints = cv2.aruco.estimatePoseSingleMarkers(markerCorner, markerSize, mtx_new, dist_new)
+                    
+                    if debug_image_view:
+                        cv2.aruco.drawAxis(frame, mtx_new, dist_new, rvec, tvec, markerSize*0.75)  # Draw Axis
+
+                    # Add the Transform from robot frame to marker frame
+                    R_cm = cv2.Rodrigues(rvec.flatten())[0] # 3x3
+                    T_cm = tvec[0].T # 3x1
+
+                    R_rm = np.eye(3)# Marker and the Robot has the same orientation assumption, otherwise we had to parse it from csv file adding orientation paramaters
+                    T_rm = np.array([x,y,z]).reshape(3,1) # 3x1
+
+                    R_cr = R_cm @ R_rm.T
+                    T_cr = T_cm - R_cr@T_rm
+
+                    # print("[INFO] ArUco marker ID: {}".format(markerID))
+                    # print(tvec[0].flatten()) # in camera's frame)
+                    # print(rvec[0].flatten()) # in camera's frame)
+                    rvecs_all.append(R_cr)
+                    tvecs_all.append(T_cr)
+
+                rvecs_all = np.array(rvecs_all) # (N,3,3)
+                # print("rvecs_all.shape:", rvecs_all.shape)
+                tvecs_all = np.array(tvecs_all) # (N,3,1)
+                # print("tvecs_all.shape:",tvecs_all.shape)
+                tvecs_all = np.squeeze(tvecs_all, axis=2).T # (3,N)
+
+                if debug_image_view:
+                    # show the output image
+                    cv2.imshow("Image", frame)
+                    cv2.waitKey(1)
+                    # k = cv2.waitKey(1)
+
+                    if debug_save_labeled_img:
+                        # then its a worthy image, save it
+                        img_name = "./localization_images_labeled/image_{}.png".format(time_stamp)
+                        cv2.imwrite(img_name, frame)
+                        print("{} written!".format(img_name))
+
+                # Transform detected robot locations from camera frame to World frame
+                rvecs_all = R_oc @ rvecs_all # (N,3,3) # R_or 
+
+                tvecs_all = R_oc @ tvecs_all # (3,N)
+                tvecs_all = T_oc + tvecs_all # (3,N) # T_or 
+                # print(np.shape(tvecs_all))
+
+                # Transform detected robot locations from World frame to plane frame
+                rvecs_all = R_po @ rvecs_all # (N,3,3) # R_pr 
+
+                tvecs_all = R_po @ tvecs_all # (3,N)
+                tvecs_all = T_po + tvecs_all # (3,N) # T_pr
+
+                # Convert 3D info to 2D data
+                # Convert rotation matrices to ZYX euler angles
+                THETAs = []
+                for R in rvecs_all:
+                    x,y,z = euler_angles_from_rotation_matrix(R)
+                    THETAs.append(z) # rad
+                THETAs = np.array(THETAs) # (N,)
+
+                tvecs_all = tvecs_all[0:2,:] # remove the z axis values since we need 2D data
+                Xs = tvecs_all[0,:] # (N,)
+                Ys = tvecs_all[1,:] # (N,)
+                
+                if debug_plot_view:
+                    # plt.figure()
+                    plt.title("2D Data")
+                    plt.xlabel("X")
+                    plt.ylabel("Y")
+
+                    plt.scatter(Xs, Ys, marker='o')
+                    plt.axis('equal')
+                    for i, label in enumerate(places_all): 
+                        plt.text(Xs[i], Ys[i],label)
+
+                    for (x,y,theta) in zip(Xs,Ys,THETAs):
+                        plt.arrow(x, y, math.cos(theta)*250,math.sin(theta)*250, head_width = .1)
+
+                    plt.grid()
+                    plt.pause(0.001)
+                    # plt.show()
+                    fig.show()
+
+                # Finally, save position and heading data of each robot(place) with time stamps
+                # for (place,x,y,theta) in zip(places_all,Xs,Ys,THETAs):
+                data = {'place': places_all, 'time': time_stamp, 'x': Xs, 'y': Ys, 'theta': THETAs}
+                print(data)
+                df_data = pd.DataFrame(data)
+                df_output = df_output.append(df_data)
+                
+
+
+    except KeyboardInterrupt:
+        print("Ctrl-C is pressed to terminate.. Closing...")
+        cam.release()
+        if debug_image_view:
+            cv2.destroyAllWindows()
+            # if k%256 == 27:
+            #     # ESC pressed
+            #     print("Escape hit, closing...")
+            #     break
+
+        return df_output
+
+        
 
     
 #########################################################
@@ -341,29 +376,9 @@ def load_coefficients_best_fit_plane(path):
     return [R_op, R_po, T_op, T_po]
 
 
-def save_coefficients(R_op, R_po, T_op, T_po, RMSE, path):
-    """ Save the camera matrix and the distortion coefficients to given path/file. """
-    cv_file = cv2.FileStorage(path, cv2.FILE_STORAGE_WRITE)
-    
-    # Rotation matrix 
-    print("R_op: " + str(R_op))
-    cv_file.write("R_op", R_op )
+def save_coefficients(df, path):
+    df.to_csv(path, index = False)
 
-    print("R_po: " + str(R_po))
-    cv_file.write("R_po", R_po)
-
-    # Tranlastion vector
-    cv_file.write("T_op", T_op)
-    print("T_op: " + str(T_op))
-
-    print("T_po: " + str(T_po))
-    cv_file.write("T_po", T_po)
-
-    print("RMSE: ", RMSE, " (mm)")
-    cv_file.write("RMSE", RMSE)
-
-    # note you *release* you don't close() a FileStorage object
-    cv_file.release()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Camera Aruco calibration')
@@ -373,11 +388,12 @@ if __name__ == '__main__':
     parser.add_argument('--calib_file_aruco', type=str, required=True, help='YML file to read transformations from world frame to best fitting 2D plane to aruco')
     parser.add_argument('--aruco_tags_info_file', type=str, required=True, help="info csv file about the existing Aruco tags in the workspace")
     parser.add_argument('--save_file', type=str, required=True, help='YML file to save calibration matrices')
-
     args = parser.parse_args()
-    
 
-    # R_op, R_po, T_op, T_po, RMSE = 
-    aruco_localize_2D(args.calib_file, args.calib_file_undistorted,  args.calib_file_aruco, args.aruco_tags_info_file)
-    # save_coefficients(R_op, R_po, T_op, T_po, RMSE, args.save_file)
+    # All data collected with time stamps with structure 
+    df_output = aruco_localize_2D(args.calib_file, args.calib_file_undistorted,  args.calib_file_aruco, args.aruco_tags_info_file)
+    
+    # seperate the whole data per robot(place) and save into seperate csv files
+    save_coefficients(df_output,args.save_file)
+
     print("Aruco Localization 2D is finished.")

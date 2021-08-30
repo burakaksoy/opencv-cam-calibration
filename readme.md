@@ -167,5 +167,5 @@ Aruco Calibration is finished.
 ## 05-aruco_localization_2D_realtime.py
 
 ```
-python3 05-aruco_localization_2D_realtime.py --calib_file ./calibration_files/camera.yml --calib_file_undistorted ./calibration_files/camera_undistorted.yml --calib_file_aruco ./calibration_files/camera_aruco.yml  --aruco_tags_info_file ./aruco_tags_info2.csv  --save_file ./calibration_files/camera_aruco.yml
+python3 05-aruco_localization_2D_realtime.py --calib_file ./calibration_files/camera.yml --calib_file_undistorted ./calibration_files/camera_undistorted.yml --calib_file_aruco ./calibration_files/camera_aruco.yml  --aruco_tags_info_file ./aruco_tags_info2.csv  --save_file ./localization_files/robot_positions.csv
 ```

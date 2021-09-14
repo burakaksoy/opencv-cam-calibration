@@ -36,7 +36,7 @@ ARUCO_DICT = {
 }
 
 def aruco_localize_2D(intrinsic_calib_path, intrinsic_calib_path_undistorted, calib_path_aruco, aruco_tags_info_path):
-    debug_image_view = False # Shows opencv aruco detections on camera image
+    debug_image_view = True # Shows opencv aruco detections on camera image
     debug_plot_view = False # Shows robot positions on matplotlib
     debug_save_undistorted_img = False # For saving undistorted images for later use again
     debug_save_labeled_img = False # If debug image view is False this does not have any effect

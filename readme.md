@@ -165,7 +165,36 @@ Aruco Calibration is finished.
 (`T_po`: Translation vector from best fitting plane frame to world frame in best fitting plane frame)
 
 ## 05-aruco_localization_2D_realtime.py
+Finds the 
+```
+python3 05-aruco_localization_2D_realtime.py --calib_file ./calibration_files/camera.yml --calib_file_undistorted ./calibration_files/camera_undistorted.yml --calib_file_aruco ./calibration_files/camera_aruco.yml  --aruco_tags_info_file ./aruco_tags_info3.csv  --save_file ./localization_files/robot_positions.csv
+```
+
+## 06-capture_UWB.py
+Use it to capture a series of checkerboard images attached to UWB tags. These images are going to be used to find (calibrate) the relative pose between the vision system (the best fitting plane frame that is previously found) and the UWB anchors origin.  
+```
+python3 06-capture_UWB.py
+```
+Keep pressing 'SPACE' in your keyboard to capture as many as images you want. Then Press 'ESC' to close the program. Images are saved to folder `calibration_images_uwb/` with a numbered name combined with prefix `image_` and type `.png` (for example `image_01.png`)
+
+## 07-extrinsic_calibration_UWB.py
+Assuming the UWB xyz locations are also captured in the previous step along with the images, this step finds (calibrates) the relative pose between the vision system (the best fitting plane frame that is previously found) and the UWB anchors origin. 
 
 ```
-python3 05-aruco_localization_2D_realtime.py --calib_file ./calibration_files/camera.yml --calib_file_undistorted ./calibration_files/camera_undistorted.yml --calib_file_aruco ./calibration_files/camera_aruco.yml  --aruco_tags_info_file ./aruco_tags_info2.csv  --save_file ./localization_files/robot_positions.csv
+python3 07-extrinsic_calibration_UWB.py --calib_file ./calibration_files/camera.yml --calib_file_undistorted ./calibration_files/camera_undistorted.yml --calib_file_aruco ./calibration_files/camera_aruco.yml  --image_dir ./calibration_images_uwb --prefix image_  --image_format png --square_size 65 --width 8 --height 7 --uwb_tags_info_file ./uwb_tags_info.csv --save_file ./calibration_files/bestFitPlane_to_inertialUWB.yaml
 ```
+
+python3 07-extrinsic_calibration_UWB.py 
+--calib_file ./calibration_files/camera.yml 
+--calib_file_undistorted ./calibration_files/camera_undistorted.yml 
+--calib_file_aruco ./calibration_files/camera_aruco.yml  
+
+--image_dir ./calibration_images_uwb 
+--prefix image_  
+--image_format png 
+
+--square_size 65 
+--width 8 
+--height 7 
+--uwb_tags_info_file ./uwb_tags_info.csv 
+--save_file ./localization_files/robot_positions.csv

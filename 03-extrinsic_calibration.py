@@ -25,7 +25,7 @@ def calibrate_camera_extrinsic(intrinsic_calib_path, intrinsic_calib_path_undist
     ret, corners = cv2.findChessboardCorners(gray, (width, height), None)
     assert ret, "Could not find calibration target"
 
-    cv2.drawChessboardCorners(gray, (width, height), corners, ret)
+    cv2.drawChessboardCorners(frame, (width, height), corners, ret)
 
     objp = np.zeros((height*width, 3), np.float32)
     objp[:, :2] = np.mgrid[0:width, 0:height].T.reshape(-1, 2)

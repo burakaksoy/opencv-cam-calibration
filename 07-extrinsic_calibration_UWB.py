@@ -3,10 +3,11 @@ import cv2
 import glob
 import argparse
 import pandas as pd
+from natsort import os_sorted
 
 from numpy.lib.function_base import append
 
-def calibrate_uwb_extrinsic(intrinsic_calib_path, intrinsic_calib_path_undistorted,  calib_path_aruco, image_dir, prefix, image_format, square_size, width, height, uwb_tags_info_path):
+def calibrate_uwb_extrinsic(intrinsic_calib_path, intrinsic_calib_path_undistorted,  calib_path_aruco, image_dir, prefix, image_format, square_size, width, height, uwb_tags_info_path,rmse_threshold):
     [mtx, dist, R_co, R_oc, T_co, T_oc] = load_coefficients(intrinsic_calib_path)
     [mtx_new, dist_new, R_co, R_oc, T_co, T_oc] = load_coefficients(intrinsic_calib_path_undistorted)
     [R_op, R_po, T_op, T_po] = load_coefficients_best_fit_plane(calib_path_aruco)
@@ -18,14 +19,19 @@ def calibrate_uwb_extrinsic(intrinsic_calib_path, intrinsic_calib_path_undistort
     if image_format[:1] == '.':
         image_format = image_format[1:]
 
-    images = sorted(glob.glob(image_dir+'/' + prefix + '*.' + image_format))
+    # images = sorted(glob.glob(image_dir+'/' + prefix + '*.' + image_format))
+    images = os_sorted(glob.glob(image_dir+'/' + prefix + '*.' + image_format))
 
     print(image_dir+'/' + prefix + '*.' + image_format)
-    print(len(images))
+    # print(images)
+    print("Number of images found in the directory: ",len(images))
 
-    T_pu_vecs = []
+    # Create space holder for T vectors
+    T_ou_vecs = np.empty((len(images),3)) # Nx3
+    T_ou_vecs[:] = np.NaN 
+    valid_image_indices = []
 
-    for fname in images:
+    for index,fname in enumerate(images):
         frame = cv2.imread(fname)
         # try undistorted image
         # h,  w = frame.shape[:2]
@@ -40,7 +46,12 @@ def calibrate_uwb_extrinsic(intrinsic_calib_path, intrinsic_calib_path_undistort
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         
         ret, corners = cv2.findChessboardCorners(gray, (width, height), None)
-        assert ret, "Could not find calibration target"
+        # assert ret, "Could not find calibration target"
+        if not ret:
+            print(fname, " is invalid  with index: ", index)
+            T_ou_vecs[index,:] = np.NaN
+            continue # Get another image
+        valid_image_indices.append(index) # Add image index to valid images since the checkerboard is found (ie. ret is true)
 
         cv2.drawChessboardCorners(frame, (width, height), corners, ret)
 
@@ -79,7 +90,7 @@ def calibrate_uwb_extrinsic(intrinsic_calib_path, intrinsic_calib_path_undistort
         # cv2.waitKey(0)
         # cv2.destroyAllWindows()
 
-        # print("Frame name: ", fname)
+        print("Frame name: ", fname)
         # Find Pose of the UWB frame wrt to camera 
         R_bu = np.array([[0,1.,0],[1.,0,0],[0,0,-1.]]) # Rotation matrix btw chessBoard(b) and the uwb frame(u) we want
         R_cb = cv2.Rodrigues(rvecs.flatten())[0]  # Rotation matrix btw camera(c) and the chessboard(b)
@@ -94,43 +105,54 @@ def calibrate_uwb_extrinsic(intrinsic_calib_path, intrinsic_calib_path_undistort
         # print("T_cu: " + str(tvecs)) # in camera frame
         # print("T_uc: " + str( -R_cu.T.dot(tvecs))) # in uwb frame
 
-        # Find pose of the UWB frame(u) wrt best fitting plane(p)
-        R_cp = R_co @ R_op
-        R_pc = R_cp.T
-        R_pu = R_pc @ R_cu
-        R_up = R_pu.T
+        # # Find pose of the UWB frame(u) wrt best fitting plane(p)
+        # R_cp = R_co @ R_op
+        # R_pc = R_cp.T
+        # R_pu = R_pc @ R_cu
+        # R_up = R_pu.T
 
-        T_pu = - R_pc @ T_co + T_po + R_pc @ T_cu
+        # T_pu = - R_pc @ T_co + T_po + R_pc @ T_cu
         # print("R_pu: ", R_pu)
         # print("T_pu: ", T_pu)
 
-        T_pu_vecs.append(np.squeeze(T_pu)+1000.0)
+        # Find pose of the UWB frame(u) wrt world plane(o)
+        R_ou = R_oc @ R_cu
+        T_ou = R_oc @ (T_cu - T_co)
 
-    T_pu_vecs = np.array(T_pu_vecs) # Nx3
-    # print("T_pu_vecs:", T_pu_vecs)
+        # print("R_ou: ", R_ou)
+        # print("T_ou: ", T_ou)
+
+        T_ou_vecs[index,:] = np.squeeze(T_ou)
+
+    print("T_ou_vecs:", T_ou_vecs)
+    print("T_ou_vecs.shape:", T_ou_vecs.shape)
+    valid_image_indices = np.array(valid_image_indices) 
+    print("valid_image_indices: ", valid_image_indices)
 
     # Use only the positions with a lower RMSE than a certain threshold
-    rmse_threshold = 60.0 # mm
+    # rmse_threshold = 60.0 # mm
     print("rmse_threshold: ", rmse_threshold, " mm")
     valid_indices = np.argwhere( RMSE_vals <= rmse_threshold)[:,0] # (N,)
+
+    valid_indices = np.intersect1d(valid_indices, valid_image_indices)
     print("valid_indices:", valid_indices)
     print("number of valid_indices:", len(valid_indices))
 
     RMSE_vals = RMSE_vals[valid_indices,:]
-    T_pu_vecs = T_pu_vecs[valid_indices,:] # Tranlation vectors from best fit plane(p) to detected uwb calibration frame(u) in best fit plane frame(p)
+    T_ou_vecs = T_ou_vecs[valid_indices,:] # Tranlation vectors from world frame(o) to detected uwb calibration frame(u) in world frame(o)
     T_iu_vecs = T_iu_vecs[valid_indices,:] # Tranlation vectors from inertial uwb base(i) to detected uwb calibration frame(u) in inertial uwb base frame(i)
     
     # print("RMSE_vals:", RMSE_vals)
     print("T_iu_vecs:", T_iu_vecs)
-    print("T_pu_vecs:", T_pu_vecs)
+    print("T_ou_vecs:", T_ou_vecs)
 
-    R_pi,T_pi = rigid_transform_3D(T_iu_vecs.T,T_pu_vecs.T)
-    # print("R_pi: ", R_pi) # Rotation matrix from best fitting plane(p) to inertial uwb base frame(i)
-    # print("T_pi:",  T_pi) # Translation vector from best fitting plane(p) to inertial uwb base frame(i) in (p) 
-    # print("R_ip: ", R_pi.T) # Rotation matrix from inertial uwb base frame(i) to best fitting plane(p) 
-    # print("T_ip: ",  -R_pi.T@T_pi) # Translation vector from inertial uwb base frame(i) to best fitting plane(p) in (i)
+    R_oi,T_oi = rigid_transform_3D(T_iu_vecs.T,T_ou_vecs.T)
+    # print("R_oi: ", R_oi) # Rotation matrix from world frame(o) to inertial uwb base frame(i)
+    # print("T_oi:",  T_oi) # Translation vector from world frame(o) to inertial uwb base frame(i) in (o) 
+    # print("R_io: ", R_oi.T) # Rotation matrix from inertial uwb base frame(i) to world frame(o) 
+    # print("T_io: ",  -R_oi.T@T_oi) # Translation vector from inertial uwb base frame(i) to world frame(o) in (i)
 
-    return R_pi,T_pi
+    return R_oi,T_oi
 
 def rigid_transform_3D(A, B):
     # This function is taken from https://github.com/nghiaho12/rigid_transform_3D.git
@@ -240,23 +262,23 @@ def load_coefficients_best_fit_plane(path):
     cv_file.release()
     return [R_op, R_po, T_op, T_po]
 
-def save_coefficients(R_pi,T_pi, path):
-    """ Save the poses btw best fitting plane (p) and inertial uwb base frame(i) to given path/file. """
+def save_coefficients(R_oi,T_oi, path):
+    """ Save the poses btw world frame (o) and inertial uwb base frame(i) to given path/file. """
     cv_file = cv2.FileStorage(path, cv2.FILE_STORAGE_WRITE)
 
     # Rotation matrix     
-    print("R_pi: ", R_pi) # Rotation matrix from best fitting plane(p) to inertial uwb base frame(i)
-    cv_file.write("R_pi", R_pi )
+    print("R_oi: ", R_oi) # Rotation matrix from world frame(o) to inertial uwb base frame(i)
+    cv_file.write("R_oi", R_oi )
 
-    print("R_ip: ", R_pi.T) # Rotation matrix from inertial uwb base frame(i) to best fitting plane(p) 
-    cv_file.write("R_ip", R_pi.T)
+    print("R_io: ", R_oi.T) # Rotation matrix from inertial uwb base frame(i) to world frame(o) 
+    cv_file.write("R_io", R_oi.T)
 
     # Tranlastion vector
-    print("T_pi:",  T_pi) # Translation vector from best fitting plane(p) to inertial uwb base frame(i) in (p) 
-    cv_file.write("T_pi", T_pi)
+    print("T_oi:",  T_oi) # Translation vector from world frame(o) to inertial uwb base frame(i) in (p) 
+    cv_file.write("T_oi", T_oi)
 
-    print("T_ip: ",  -R_pi.T@T_pi) # Translation vector from inertial uwb base frame(i) to best fitting plane(p) in (i)
-    cv_file.write("T_ip", -R_pi.T@T_pi)
+    print("T_io: ",  -R_oi.T@T_oi) # Translation vector from inertial uwb base frame(i) to world frame(o) in (i)
+    cv_file.write("T_io", -R_oi.T@T_oi)
 
     # note you *release* you don't close() a FileStorage object
     cv_file.release()
@@ -279,17 +301,18 @@ if __name__ == '__main__':
     parser.add_argument('--prefix', type=str, required=True, help='image name without extension or location')
     parser.add_argument('--image_format', type=str, required=True,  help='image format, png/jpg')
     
-    parser.add_argument('--square_size', type=float, required=False, help='chessboard square size')
+    parser.add_argument('--square_size', type=float, required=True, help='chessboard square size')
     parser.add_argument('--width', type=int, required=True, help='chessboard width size (num of squares on the chessboard minus one)')
     parser.add_argument('--height', type=int, required=True, help='chessboard height size (num of squares on the chessboard minus one)')
     
     parser.add_argument('--uwb_tags_info_file', type=str, required=True, help='chessboard height size (num of squares on the chessboard minus one)')
+    parser.add_argument('--rmse_threshold', type=float, required=True, help='max valid RMSE threshold in mm for UWB readings')
 
     parser.add_argument('--save_file', type=str, required=True, help='YML file to save calibration matrices')
 
 
     args = parser.parse_args()
 
-    R_pi,T_pi = calibrate_uwb_extrinsic(args.calib_file, args.calib_file_undistorted, args.calib_file_aruco,  args.image_dir, args.prefix, args.image_format, args.square_size, args.width, args.height, args.uwb_tags_info_file)
-    save_coefficients(R_pi,T_pi, args.save_file)
+    R_oi,T_oi = calibrate_uwb_extrinsic(args.calib_file, args.calib_file_undistorted, args.calib_file_aruco,  args.image_dir, args.prefix, args.image_format, args.square_size, args.width, args.height, args.uwb_tags_info_file, args.rmse_threshold)
+    save_coefficients(R_oi,T_oi, args.save_file)
     print("UWB Extrinsic Calibration is finished.")

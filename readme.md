@@ -135,7 +135,7 @@ The properties of the ArUco tags are defined in a `csv` file with the following 
  The following command reads the previously calculated default and undistorted intrinsic parameters and the defined world frame as extrinsic parameters from `./calibration_files/camera.yml` and `./calibration_files/camera_undistorted.yml`, captures 1 image, saves it into `calibration_image_aruco/` folder with the name `image_aruco` and image type `png`. Undistorts the image to prepare for aruco tag detection and detects 3D position of the tags with respect to the defined world origin. Draws bounding boxes around the detected tags (this could be used for visual inspection for the detection accuracy and the inaccurate looking ones can be eliminated from the csv file) and also draws their frames. Then finds the best fitting plane for the detected 3D points. Best fitting plane is defined with its passing-through point as the mean of the 3D points and a normal vector represented in the world frame. Fitting residual error value is printed as RMSE into the console. Then, the world frame origin and it's x-axis are projected into the best fitting plane, and are used to define the best plane frame and the origin.  The calculated results are saved to `./calibration_files/camera_aruco.yml`
 
 ```
-python3 04-aruco_calibration.py --calib_file ./calibration_files/camera.yml --calib_file_undistorted ./calibration_files/camera_undistorted.yml --image_dir ./calibration_image_aruco --image_name image_aruco --image_format png --aruco_tags_info_file ./aruco_tags_info2.csv  --save_file ./calibration_files/camera_aruco.yml
+python3 04-aruco_calibration.py --calib_file ./calibration_files/camera.yml --calib_file_undistorted ./calibration_files/camera_undistorted.yml --image_dir ./calibration_image_aruco --image_name image_aruco --image_format png --aruco_tags_info_file ./aruco_tags_info3.csv  --save_file ./calibration_files/camera_aruco.yml
 ```
 
 An example output would be:
@@ -171,30 +171,16 @@ python3 05-aruco_localization_2D_realtime.py --calib_file ./calibration_files/ca
 ```
 
 ## 06-capture_UWB.py
-Use it to capture a series of checkerboard images attached to UWB tags. These images are going to be used to find (calibrate) the relative pose between the vision system (the best fitting plane frame that is previously found) and the UWB anchors origin.  
+Use it to capture a series of checkerboard images attached to UWB tags. These images are going to be used to find (calibrate) the relative pose between the vision system (the world frame that is previously found in extrinsic calibration) and the UWB anchors origin.  
 ```
 python3 06-capture_UWB.py
 ```
 Keep pressing 'SPACE' in your keyboard to capture as many as images you want. Then Press 'ESC' to close the program. Images are saved to folder `calibration_images_uwb/` with a numbered name combined with prefix `image_` and type `.png` (for example `image_01.png`)
 
 ## 07-extrinsic_calibration_UWB.py
-Assuming the UWB xyz locations are also captured in the previous step along with the images, this step finds (calibrates) the relative pose between the vision system (the best fitting plane frame that is previously found) and the UWB anchors origin. 
+Assuming the UWB xyz locations are also captured in the previous step along with the images, this step finds (calibrates) the relative pose between the vision system (the world frame that is previously found in extrinsic calibration) and the UWB anchors origin. 
 
 ```
-python3 07-extrinsic_calibration_UWB.py --calib_file ./calibration_files/camera.yml --calib_file_undistorted ./calibration_files/camera_undistorted.yml --calib_file_aruco ./calibration_files/camera_aruco.yml  --image_dir ./calibration_images_uwb --prefix image_  --image_format png --square_size 65 --width 8 --height 7 --uwb_tags_info_file ./uwb_tags_info.csv --save_file ./calibration_files/bestFitPlane_to_inertialUWB.yaml
+python3 07-extrinsic_calibration_UWB.py --calib_file ./calibration_files/camera.yml --calib_file_undistorted ./calibration_files/camera_undistorted.yml --calib_file_aruco ./calibration_files/camera_aruco.yml  --image_dir ./calibration_images_uwb --prefix image_  --image_format png --square_size 65 --width 8 --height 7 --uwb_tags_info_file ./uwb_tags_info.csv --rmse_threshold 60 --save_file ./calibration_files/world_to_inertialUWB.yaml
 ```
 
-python3 07-extrinsic_calibration_UWB.py 
---calib_file ./calibration_files/camera.yml 
---calib_file_undistorted ./calibration_files/camera_undistorted.yml 
---calib_file_aruco ./calibration_files/camera_aruco.yml  
-
---image_dir ./calibration_images_uwb 
---prefix image_  
---image_format png 
-
---square_size 65 
---width 8 
---height 7 
---uwb_tags_info_file ./uwb_tags_info.csv 
---save_file ./localization_files/robot_positions.csv

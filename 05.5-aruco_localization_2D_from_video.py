@@ -35,7 +35,7 @@ ARUCO_DICT = {
 	"DICT_APRILTAG_36h11": cv2.aruco.DICT_APRILTAG_36h11
 }
 
-def aruco_localize_2D(intrinsic_calib_path, intrinsic_calib_path_undistorted, calib_path_aruco, aruco_tags_info_path):
+def aruco_localize_2D(intrinsic_calib_path, intrinsic_calib_path_undistorted, calib_path_aruco, aruco_tags_info_path, video_path):
     debug_image_view = True # Shows opencv aruco detections on camera image
     debug_plot_view = False # Shows robot positions on matplotlib
     debug_save_undistorted_img = False # For saving undistorted images for later use again
@@ -60,12 +60,22 @@ def aruco_localize_2D(intrinsic_calib_path, intrinsic_calib_path_undistorted, ca
         # object With column names only
         df_output = pd.DataFrame(columns = ['place', 'time', 'x','y','theta'])
 
-        # Start the camera
-        cam = cv2.VideoCapture(1)
-        cam.set(3,3840)
-        cam.set(4,2160)
+        # Start the camera video
+        cam = cv2.VideoCapture(video_path)
+        # cam.set(3,3840)
+        # cam.set(4,2160)
         # cam.set(3,640)
         # cam.set(4,480)
+
+        fps = cam.get(cv2.CAP_PROP_FPS)      # OpenCV2 version 2 used "CV_CAP_PROP_FPS"
+        frame_count = int(cam.get(cv2.CAP_PROP_FRAME_COUNT))
+        duration = frame_count/fps
+        print('fps = ' + str(fps))
+        print('number of frames = ' + str(frame_count))
+        print('duration (S) = ' + str(duration))
+        duration_minutes = int(duration/60)
+        duration_seconds = duration%60
+        print('duration (M:S) = ' + str(duration_minutes) + ':' + str(duration_seconds))
 
         if debug_image_view:
             cv2.namedWindow("Image", cv2.WINDOW_NORMAL)
@@ -76,13 +86,15 @@ def aruco_localize_2D(intrinsic_calib_path, intrinsic_calib_path_undistorted, ca
             fig.show()
 
         print("Press Ctrl-C to terminate program")
-        while True:
+        while (cam.isOpened()):
             ret, frame = cam.read()
             if not ret:
                 print("failed to grab frame")
                 break
             
-            time_stamp = time.time()
+            time_stamp = cam.get(cv2.CAP_PROP_POS_MSEC)
+            hours,minutes,seconds = millis_2_hr_min_sec(time_stamp) # prints time to console in hrs:mins:seconds
+            print ("%d:%d" % (minutes, seconds), "/", "%d:%d" %(duration_minutes,duration_seconds), ", Completed:", int(time_stamp/(duration*100)) , "%" )
             
             # try undistorted image
             # h,  w = frame.shape[:2]
@@ -114,7 +126,7 @@ def aruco_localize_2D(intrinsic_calib_path, intrinsic_calib_path_undistorted, ca
                     sys.exit(0)
 
                 # load the ArUCo dictionary, grab the ArUCo parameters, and detect the markers
-                print("[INFO] detecting '{}' tags...".format(aruco_type))
+                # print("[INFO] detecting '{}' tags...".format(aruco_type))
                 arucoDict = cv2.aruco.Dictionary_get(ARUCO_DICT[aruco_type])
                 arucoParams = cv2.aruco.DetectorParameters_create()
                 (corners, ids, rejected) = cv2.aruco.detectMarkers(gray, arucoDict, parameters=arucoParams)
@@ -291,9 +303,19 @@ def aruco_localize_2D(intrinsic_calib_path, intrinsic_calib_path_undistorted, ca
                 # Finally, save position and heading data of each robot(place) with time stamps
                 # for (place,x,y,theta) in zip(places_all,Xs,Ys,THETAs):
                 data = {'place': places_all, 'time': time_stamp, 'x': Xs, 'y': Ys, 'theta': THETAs}
-                print(data)
+                # print(data)
                 df_data = pd.DataFrame(data)
                 df_output = df_output.append(df_data)
+
+        print("Video is finished.. Closing...")
+        cam.release()
+        if debug_image_view:
+            cv2.destroyAllWindows()
+            # if k%256 == 27:
+            #     # ESC pressed
+            #     print("Escape hit, closing...")
+            #     break
+        return df_output
                 
 
 
@@ -310,7 +332,14 @@ def aruco_localize_2D(intrinsic_calib_path, intrinsic_calib_path_undistorted, ca
         return df_output
 
         
-
+def millis_2_hr_min_sec(millis):
+    millis = int(millis)
+    seconds=(millis/1000)%60
+    seconds = int(seconds)
+    minutes=(millis/(1000*60))%60
+    minutes = int(minutes)
+    hours=(millis/(1000*60*60))%24
+    return hours,minutes,seconds
     
 #########################################################
 # ZYX Euler angles calculation from rotation matrix
@@ -388,11 +417,12 @@ if __name__ == '__main__':
     parser.add_argument('--calib_file_undistorted', type=str, required=True, help='YML file to read calibration matrices of undistorted images')
     parser.add_argument('--calib_file_aruco', type=str, required=True, help='YML file to read transformations from world frame to best fitting 2D plane to aruco')
     parser.add_argument('--aruco_tags_info_file', type=str, required=True, help="info csv file about the existing Aruco tags in the workspace")
+    parser.add_argument('--video_file', type=str, required=True, help='Video file to read positions of the robots')
     parser.add_argument('--save_file', type=str, required=True, help='YML file to save calibration matrices')
     args = parser.parse_args()
 
     # All data collected with time stamps with structure 
-    df_output = aruco_localize_2D(args.calib_file, args.calib_file_undistorted,  args.calib_file_aruco, args.aruco_tags_info_file)
+    df_output = aruco_localize_2D(args.calib_file, args.calib_file_undistorted,  args.calib_file_aruco, args.aruco_tags_info_file, args.video_file)
     
     # seperate the whole data per robot(place) and save into seperate csv files
     save_coefficients(df_output,args.save_file)

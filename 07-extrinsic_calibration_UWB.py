@@ -84,11 +84,11 @@ def calibrate_uwb_extrinsic(intrinsic_calib_path, intrinsic_calib_path_undistort
             
             # Show the markers on the image
             frame = draw(frame,corners2,imgpts)
-        # cv2.namedWindow(fname, cv2.WINDOW_NORMAL)
-        # cv2.resizeWindow(fname, (1280, 720))
-        # cv2.imshow(fname, frame)
-        # cv2.waitKey(0)
-        # cv2.destroyAllWindows()
+        cv2.namedWindow(fname, cv2.WINDOW_NORMAL)
+        cv2.resizeWindow(fname, (1280, 720))
+        cv2.imshow(fname, frame)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
 
         print("Frame name: ", fname)
         # Find Pose of the UWB frame wrt to camera 

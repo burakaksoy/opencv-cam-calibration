@@ -170,6 +170,12 @@ Finds the
 python3 05-aruco_localization_2D_realtime.py --calib_file ./calibration_files/camera.yml --calib_file_undistorted ./calibration_files/camera_undistorted.yml --calib_file_aruco ./calibration_files/camera_aruco.yml  --aruco_tags_info_file ./aruco_tags_info3.csv  --save_file ./localization_files/robot_positions.csv
 ```
 
+## 05.5-aruco_localization_2D_from_video.py
+Finds the 
+```
+python3 05.5-aruco_localization_2D_from_video.py --calib_file ./calibration_files/camera.yml --calib_file_undistorted ./calibration_files/camera_undistorted.yml --calib_file_aruco ./calibration_files/camera_aruco.yml  --aruco_tags_info_file ./aruco_tags_info3.csv --video_file ./localization_videos/video_1.mp4 --save_file ./localization_files/robot_positions_video1.csv
+```
+
 ## 06-capture_UWB.py
 Use it to capture a series of checkerboard images attached to UWB tags. These images are going to be used to find (calibrate) the relative pose between the vision system (the world frame that is previously found in extrinsic calibration) and the UWB anchors origin.  
 ```

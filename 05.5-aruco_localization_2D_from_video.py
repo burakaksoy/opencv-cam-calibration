@@ -94,7 +94,7 @@ def aruco_localize_2D(intrinsic_calib_path, intrinsic_calib_path_undistorted, ca
             
             time_stamp = cam.get(cv2.CAP_PROP_POS_MSEC)
             hours,minutes,seconds = millis_2_hr_min_sec(time_stamp) # prints time to console in hrs:mins:seconds
-            print ("%d:%d" % (minutes, seconds), "/", "%d:%d" %(duration_minutes,duration_seconds), ", Completed:", int(time_stamp/(duration*100)) , "%" )
+            print ("%d:%d" % (minutes, seconds), "/", "%d:%d" %(duration_minutes,duration_seconds), ", Completed:", int(time_stamp/(duration*10)) , "%" )
             
             # try undistorted image
             # h,  w = frame.shape[:2]

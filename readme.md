@@ -187,6 +187,6 @@ Keep pressing 'SPACE' in your keyboard to capture as many as images you want. Th
 Assuming the UWB xyz locations are also captured in the previous step along with the images, this step finds (calibrates) the relative pose between the vision system (the world frame that is previously found in extrinsic calibration) and the UWB anchors origin. 
 
 ```
-python3 07-extrinsic_calibration_UWB.py --calib_file ./calibration_files/camera.yml --calib_file_undistorted ./calibration_files/camera_undistorted.yml --calib_file_aruco ./calibration_files/camera_aruco.yml  --image_dir ./calibration_images_uwb --prefix image_  --image_format png --square_size 65 --width 8 --height 7 --uwb_tags_info_file ./uwb_tags_info.csv --rmse_threshold 60 --save_file ./calibration_files/world_to_inertialUWB.yaml
+python3 07-extrinsic_calibration_UWB.py --calib_file ./calibration_files/camera.yml --calib_file_undistorted ./calibration_files/camera_undistorted.yml --calib_file_aruco ./calibration_files/camera_aruco.yml  --image_dir ./calibration_images_uwb --prefix image_  --image_format png --square_size 65 --width 8 --height 7 --uwb_tags_info_file ./uwb_tags_info2.csv --rmse_threshold 40 --save_file ./calibration_files/world_to_inertialUWB.yaml
 ```
 

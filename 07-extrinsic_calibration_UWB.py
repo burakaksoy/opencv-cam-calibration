@@ -87,7 +87,7 @@ def calibrate_uwb_extrinsic(intrinsic_calib_path, intrinsic_calib_path_undistort
         cv2.namedWindow(fname, cv2.WINDOW_NORMAL)
         cv2.resizeWindow(fname, (1280, 720))
         cv2.imshow(fname, frame)
-        cv2.waitKey(0)
+        cv2.waitKey(1000)
         cv2.destroyAllWindows()
 
         print("Frame name: ", fname)
@@ -216,7 +216,7 @@ def load_uwb_locations(path):
 
     # Select RMSE values
     RMSE_vals = df[['rmse']].values.tolist()
-    RMSE_vals = np.array(RMSE_vals)*10.0 # Nx1 # convert to mm from cm
+    RMSE_vals = np.array(RMSE_vals)*1000.0 # Nx1 # convert to mm from m
 
     # print("T_iu_vecs:", T_iu_vecs)
     # print("RMSE_vals:", RMSE_vals)
